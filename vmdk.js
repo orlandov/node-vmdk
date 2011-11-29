@@ -154,11 +154,11 @@ VMDK.prototype.getMarker = function (offset, callback) {
     switch (type) {
       case 'grain':
         var grain = self.parser.readData(GrainMarkerStruct, buffer, 0);
-        console.warn("Grain:");
+        // console.warn("Grain:");
         // console.dir(grain);
         return callback(null, type, grain);
       default:
-        console.warn("Unknown type %s", type);
+        // console.warn("Unknown type %s", type);
         // console.dir(marker);
         return callback(null, type, marker);
     }
@@ -258,10 +258,10 @@ VMDKStream.prototype.start = function () {
       var oldOffset = offset;
       self.vmdk.getMarker(offset, function (error, type, marker) {
         var gunzip = new compress.Gunzip(true, false);
-        console.warn("Marker at " +  offset + " was %s", type);
+        // console.warn("Marker at " +  offset + " was %s", type);
 
         var size = marker.size;
-        console.warn("Marker size is " + marker.size);
+        // console.warn("Marker size is " + marker.size);
 
         if (type === 'grain' && marker.size) {
           fs.read
@@ -283,7 +283,7 @@ VMDKStream.prototype.start = function () {
                   var readSize = toRead > DEFAULT_READ_SIZE
                                  ? DEFAULT_READ_SIZE : toRead;
 
-                  console.warn("Toread = %d, readize = %d", toRead, readSize);
+                  // console.warn("Toread = %d, readize = %d", toRead, readSize);
                   fs.read
                   ( self.vmdk.fd, buffer, 0, readSize, offset
                   , function (error, bytesRead, buf) {
@@ -292,7 +292,7 @@ VMDKStream.prototype.start = function () {
                       }
                       toRead -= bytesRead;
                       offset += bytesRead;
-                      console.warn("Data chunk toRead= "+toRead);
+                      // console.warn("Data chunk toRead= "+toRead);
                       gunzip.write(buf, function (error, decompressed) {
                         if (error) {
                           console.error("gz error " + error.message);
@@ -316,12 +316,12 @@ VMDKStream.prototype.start = function () {
                     if (decompressed)
                       self.emit('data', decompressed);
 
-                    console.warn("Done grain");
+                    // console.warn("Done grain");
 
-                    console.warn("MOving to next grain");
-                    console.warn(offset);
+                    // console.warn("MOving to next grain");
+                    // console.warn(offset);
                     offset = nextClosest(offset);
-                    console.warn(offset);
+                    // console.warn(offset);
                     callback();
                   });
                 }
@@ -337,7 +337,7 @@ VMDKStream.prototype.start = function () {
     }
   , function (error) {
       if (error) {
-        console.warn("There was an error: " + error.message);
+        // console.warn("There was an error: " + error.message);
       }
 
       self.emit('end');
