@@ -29,4 +29,4 @@ May spontaenously spew forth unspeakable evil.
 
 # AUTHOR
 
-Orlando Vazquez < orland@joyent.com >
+Orlando Vazquez < orlando@joyent.com >
