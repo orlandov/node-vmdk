@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 var async = require('async');
 var VMDK = require('./vmdk');
 
@@ -11,9 +12,9 @@ v.open(function (error) {
     v.close();
   });
 
-  stream.on('data', function () {
-    console.log("Got data");
-    
-  });
+  //stream.on('data', function () {
+  //  console.log("Got data");
+  //});
+
   stream.start();
 });

@@ -128,7 +128,7 @@ VMDK.prototype.parseSparseExtentHeader = function (buffer) {
 }
 
 VMDK.prototype.dataAt = function (offset, size, callback) {
-  var buffer = new Buffer(512);
+  var buffer = new Buffer(size);
   fs.read(this.fd, buffer, 0, 512, offset, function (error, bytesRead, buf) {
     return callback(error, buffer);
   });
@@ -138,7 +138,7 @@ VMDK.prototype.markerAt = function (offset, callback) {
   var self = this;
   var buffer = new Buffer(512);
 
-  self.dataAt(offset, 512, function (error, buffer) {
+  self.dataAt(offset, 12, function (error, buffer) {
     var marker = self.parser.readData(MarkerStruct, buffer, 0);
     callback(null, marker);
   });
@@ -148,7 +148,7 @@ VMDK.prototype.getMarker = function (offset, callback) {
   var self = this;
   var buffer = new Buffer(512);
 
-  self.dataAt(offset, 12, function (error, buffer) {
+  self.dataAt(offset, 512, function (error, buffer) {
     var marker = self.parser.readData(MarkerStruct, buffer, 0);
     var type = self.markerType(marker);
     switch (type) {
@@ -223,7 +223,6 @@ VMDKStream.prototype.start = function () {
   var offset = self.vmdk.header.overHead[0] * 512;
   var done = false;
   var buffer = new Buffer(DEFAULT_READ_SIZE);
-  var gunzip = new compress.Gunzip(true, false);
 
   /*
      In a nutshell... *deep breath*
@@ -256,24 +255,22 @@ VMDKStream.prototype.start = function () {
   async.whilst
   ( function () { return !done; }
   , function (callback) {
+      var oldOffset = offset;
       self.vmdk.getMarker(offset, function (error, type, marker) {
+        var gunzip = new compress.Gunzip(true, false);
         console.warn("Marker at " +  offset + " was %s", type);
 
         var size = marker.size;
+        console.warn("Marker size is " + marker.size);
 
         if (type === 'grain' && marker.size) {
-          // Find out the size of this grain marker
           fs.read
           ( self.vmdk.fd, buffer, 0, 512, offset
           , function (error, bytesRead, buf) {
               // Move past the marker/header.
               offset += 12;
 
-              // set # of bytes to read in total. should be >= marker.size
-              var toRead = marker.size > DEFAULT_READ_SIZE
-                           ? DEFAULT_READ_SIZE : marker.size;
-
-              console.warn("Toread = %d", toRead);
+              var toRead = marker.size;
 
               // Read and emit data from the compressed grain block until we have
               // read `marker.size` number of bytes.  We'll set how many bytes
@@ -283,21 +280,26 @@ VMDKStream.prototype.start = function () {
               async.whilst
               ( function () { return toRead > 0; }
               , function (callback) {
+                  var readSize = toRead > DEFAULT_READ_SIZE
+                                 ? DEFAULT_READ_SIZE : toRead;
+
+                  console.warn("Toread = %d, readize = %d", toRead, readSize);
                   fs.read
-                  ( self.vmdk.fd, buffer, 0, DEFAULT_READ_SIZE, offset
+                  ( self.vmdk.fd, buffer, 0, readSize, offset
                   , function (error, bytesRead, buf) {
                       if (error) {
                         return self.emit('error', error);
                       }
                       toRead -= bytesRead;
                       offset += bytesRead;
+                      console.warn("Data chunk toRead= "+toRead);
                       gunzip.write(buf, function (error, decompressed) {
                         if (error) {
                           console.error("gz error " + error.message);
                           // xxx handle gz error
                         }
                         self.emit('data', decompressed);
-                        return callback(error);
+                        return callback();
                       });
                     }
                   );
@@ -313,6 +315,14 @@ VMDKStream.prototype.start = function () {
                     }
                     if (decompressed)
                       self.emit('data', decompressed);
+
+                    console.warn("Done grain");
+
+                    console.warn("MOving to next grain");
+                    console.warn(offset);
+                    offset = nextClosest(offset);
+                    console.warn(offset);
+                    callback();
                   });
                 }
               );
@@ -322,15 +332,14 @@ VMDKStream.prototype.start = function () {
           if (type === 'eos') {
             done = true;
           }
-          else {
-            offset = nextClosest(offset + 12 + marker.val[0] * 512);
-          }
-          callback();
         }
       });
     }
   , function (error) {
-      console.warn("There was an error: " + error.message);
+      if (error) {
+        console.warn("There was an error: " + error.message);
+      }
+
       self.emit('end');
     }
   );

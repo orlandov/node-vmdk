@@ -12,7 +12,7 @@ v.open(function (error) {
   var stream = v.stream();
 
   stream.on('data', function (data) {
-    console.log("Got some data: " + data);
+    //console.log( data.toString());
   });
 
   stream.on('error', function (error) {
