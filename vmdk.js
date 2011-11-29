@@ -4,6 +4,7 @@ var ctype = require('ctype');
 var compress = require('compress');
 var async = require('async');
 var util = require('util');
+var Stream = require('stream').Stream;
 
 var SECTOR_SIZE = 512;
 
@@ -69,6 +70,10 @@ var GrainMarkerStruct
   = [ { val:  { type: 'SectorType' } }
     , { size: { type: 'uint32_t' } }
     ];
+
+VMDK.prototype.open = function (callback) {
+  fs.close(this.fd, callback);
+}
 
 VMDK.prototype.open = function (callback) {
   var self = this;
@@ -150,11 +155,11 @@ VMDK.prototype.getMarker = function (offset, callback) {
       case 'grain':
         var grain = self.parser.readData(GrainMarkerStruct, buffer, 0);
         console.warn("Grain:");
-        console.dir(grain);
+        // console.dir(grain);
         return callback(null, type, grain);
       default:
         console.warn("Unknown type %s", type);
-        console.dir(marker);
+        // console.dir(marker);
         return callback(null, type, marker);
     }
   });
@@ -163,7 +168,7 @@ VMDK.prototype.getMarker = function (offset, callback) {
 var nextClosest = function (x) {
   return 512*Math.ceil(x/512);
 }
-
+/*
 VMDK.prototype.writeRaw = function (filename, callback) {
   var self = this;
   var gunzip = new compress.Gunzip(true, false);
@@ -198,84 +203,119 @@ VMDK.prototype.writeRaw = function (filename, callback) {
       console.warn("all done");
     }
   );
-  /*
-  self.getMarker(offset, function (error, type, grain) {
-    var size = grain.size;
-    var buffer = new Buffer(size);
-    fs.read(self.fd, buffer, 0, size, null, function (error, bytesRead, buf) {
-      console.log("Read %d bytes", bytesRead);
-
-      offset = offset + 12 + size;
-      offset = nextClosest(offset);
-
-      self.getMarker(offset, function (error, type, marker) {
-        console.dir(arguments);
-        console.log("Marker was %d bytes", marker.size);
-        console.dir(marker);
-        var size = grain.size;
-        var buffer = new Buffer(size);
-        fs.read(self.fd, buffer, 0, size, null, function (error, bytesRead, buf) {
-          console.log("Read %d bytes", bytesRead);
-        });
-      });
-      //return callback(error, buffer);
-    });
-*/
-
-    /*
-    // Pump data to be compressed
-    gunzip.write(grain.data, function (error, d0) {
-      console.log(error);
-      gunzip.close(function (error, d1) {
-        console.log(error);
-        console.log("Decompressed:");
-        console.dir(d0.toString('ascii'));
-      });
-    });
-    */
-}
+} */
 
 var VMDKStream = function (vmdk) {
   this.vmdk = vmdk;
 }
 
-util.inherits(VMDKStream, process.EventEmitter);
+util.inherits(VMDKStream, Stream);
 
 VMDK.prototype.stream = function () {
   return new VMDKStream(this);
 }
 
+var DEFAULT_READ_SIZE = 2048;
+
 VMDKStream.prototype.start = function () {
   var self = this;
 
-  var readSize = 2048;
   var offset = self.vmdk.header.overHead[0] * 512;
   var done = false;
-  var buffer = new Buffer(readSize);
+  var buffer = new Buffer(DEFAULT_READ_SIZE);
+  var gunzip = new compress.Gunzip(true, false);
 
-  async.whilst(
-    function () { return !done; },
-    function (callback) {
+  /*
+     In a nutshell... *deep breath*
+
+     The extents within VMDK-formatted files are composed of chunks of data
+     called "Markers".
+     Markers are generic structs of data which which can be casted to more
+     specific types based on criteria defined in the VMDK specs.  v4 Sparse
+     streamOptimized VMDK files appear to consist of grain, footer and eos
+     markers. 
+     
+     The grain markers are lined up sequentially in the file, such that the
+     data in each grain is in the correct order of the disk it's holding.
+
+     The way this will work is that we will iterate over the grain markers and
+     their associated compressed data block.
+
+     For each grain's compressed data block, we will read the number of bytes
+     set in the marker's "size" field. Each time we do this, we will decompress
+     the data and then emit it as a 'data' event.
+
+     Each marker in the file is aligned to a sector, where each sector is 512 bytes.
+
+     For now we only support grain and eos markers.
+
+     Because Node doesn't let us seek on a file descriptor directly, we'll keep
+     a running offset within the file.
+   */
+
+  async.whilst
+  ( function () { return !done; }
+  , function (callback) {
       self.vmdk.getMarker(offset, function (error, type, marker) {
         console.warn("Marker at " +  offset + " was %s", type);
 
         var size = marker.size;
 
         if (type === 'grain' && marker.size) {
-
           // Find out the size of this grain marker
-          fs.read(self.vmdk.fd, buffer, 0, 512, offset, function (error, bytesRead, buf) {
-            var toRead = marker.size > readSize ?  readSize : marker.size;
+          fs.read
+          ( self.vmdk.fd, buffer, 0, 512, offset
+          , function (error, bytesRead, buf) {
+              // Move past the marker/header.
+              offset += 12;
 
-            // Read and emit the grain data
-            fs.read(self.vmdk.fd, buffer, 0, toRead, offset, function (error, bytesRead, buf) {
-              console.warn("Read %d bytes", bytesRead);
-            });
+              // set # of bytes to read in total. should be >= marker.size
+              var toRead = marker.size > DEFAULT_READ_SIZE
+                           ? DEFAULT_READ_SIZE : marker.size;
 
-            console.warn("Read %d bytes", bytesRead);
-            offset = nextClosest(offset + 12 + marker.size);
-            self.emit('data', 'Got ' + marker.size + ' bytes');
-            callback();
+              console.warn("Toread = %d", toRead);
+
+              // Read and emit data from the compressed grain block until we have
+              // read `marker.size` number of bytes.  We'll set how many bytes
+              // we wish to read, and then count down from there until 0, at
+              // which point we can move on.
+              // Move the offset index forward as we read data from the file.
+              async.whilst
+              ( function () { return toRead > 0; }
+              , function (callback) {
+                  fs.read
+                  ( self.vmdk.fd, buffer, 0, DEFAULT_READ_SIZE, offset
+                  , function (error, bytesRead, buf) {
+                      if (error) {
+                        return self.emit('error', error);
+                      }
+                      toRead -= bytesRead;
+                      offset += bytesRead;
+                      gunzip.write(buf, function (error, decompressed) {
+                        if (error) {
+                          console.error("gz error " + error.message);
+                          // xxx handle gz error
+                        }
+                        self.emit('data', decompressed);
+                        return callback(error);
+                      });
+                    }
+                  );
+                }
+              , function (error) {
+                  if (error) {
+                    return callback(error);
+                  }
+                  gunzip.close(function (error, decompressed) {
+                    if (error) {
+                      console.error("gz error " + error.message);
+                      return;
+                    }
+                    if (decompressed)
+                      self.emit('data', decompressed);
+                  });
+                }
+              );
           });
         }
         else {
@@ -288,8 +328,9 @@ VMDKStream.prototype.start = function () {
           callback();
         }
       });
-    },
-    function () {
+    }
+  , function (error) {
+      console.warn("There was an error: " + error.message);
       self.emit('end');
     }
   );

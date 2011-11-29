@@ -15,8 +15,13 @@ v.open(function (error) {
     console.log("Got some data: " + data);
   });
 
+  stream.on('error', function (error) {
+    console.warn("Error streaming vmdk: %s", error.message);
+  });
+
   stream.on('end', function (data) {
     console.warn("VMDK Stream ended");
+    v.close();
   });
 
   stream.start();
