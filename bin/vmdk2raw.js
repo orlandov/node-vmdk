@@ -12,6 +12,10 @@ var v = new VMDK({ filename: filename });
 
 v.open(function (error) {
   var stream = v.stream();
-  stream.pipe(process.stdout, { end: false });
+  stream.pipe(process.stdout);
+  stream.on('end', function () {
+    console.warn("This is done");
+    v.close();
+  });
   stream.start();
 });
