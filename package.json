@@ -2,9 +2,13 @@
 , "description": "A Node.js stream interface abstraction to read VMDK files"
 , "autor": "Orlando Vazquez <ovazquez@gmail.com>"
 , "version": "1.0.0"
-, "directories": {
-    "lib": "./lib"
-    "bin": "./bin"
-  }
+, "directories":
+    { "lib": "./lib"
+    , "bin": "./bin"
+    }
 , "main": "./lib/vmdk.js"
+, "licenses":
+    [ { "type": "MIT"
+      , "url": "http://github.com/orlandov/node-vmdk/raw/master/LICENSE"
+    } ]
 }
