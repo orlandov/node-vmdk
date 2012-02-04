@@ -4,20 +4,41 @@ node-vmdk - Interface around reading from streamOptimized sparse VMDK files.
 
 # SYNOPSIS
 
-    // Create an output stream.
-    fs.createWriteStream(filename + ".raw", function (error, wstream) {
-      
-      // Open VMDK file.
-      var vmdk = new VMDK({ filename: filename });
-      vmdk.open(function (error) {
-        console.dir(vmdk.header);
-        
-        // Stream contents to output stream.
-        var stream = v.stream();
-        stream.pipe(wstream);
+## Command line tool
+
+    node bin/vmdk2raw.js input.vmdk output.raw
+
+## Programmatic Interface
+
+    var filename = process.argv[2];
+    var outputfilename = process.argv[3];
+
+    var v = new VMDK({ filename: filename });
+
+    var writeStream = fs.createWriteStream(outputfilename);
+
+    v.open(function (error) {
+      var stream = v.stream();
+
+      v.footer(function (error, footer) {
+        console.warn("Footer:");
+        console.warn(sys.inspect(footer));
+
+        stream.pipe(writeStream);
+        stream.on('end', function () {
+          console.warn("This is done");
+          v.close();
+          writeStream.end();
+        });
+        stream.on('error', function () {
+          console.error("THERE WAS AN ERROR");
+          process.exit(1);
+        });
+
         stream.start();
       });
     });
+
 
 # DESCRIPTION
 

@@ -2,6 +2,9 @@
 , "description": "A Node.js stream interface abstraction to read VMDK files"
 , "autor": "Orlando Vazquez <ovazquez@gmail.com>"
 , "version": "1.0.0"
+, "bin": {
+    "vmdk2raw": "./bin/vmdk2raw.js"
+  }
 , "directories":
     { "lib": "./lib"
     , "bin": "./bin"
