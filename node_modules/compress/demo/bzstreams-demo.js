@@ -21,7 +21,7 @@
  */
 
 var compress=require("../lib/compress");
-var sys=require("sys");
+var util=require("util");
 var posix=require("fs");
 var Buffer = require('buffer').Buffer;
 
@@ -37,7 +37,7 @@ function bind(fun, self) {
 
 
 function doCompress(compressor, continuation) {
-  sys.puts('Making compression requests...');
+  console.log('Making compression requests...');
   var output = '';
   compressor.setInputEncoding('utf8');
   compressor.setEncoding('binary');
@@ -46,14 +46,14 @@ function doCompress(compressor, continuation) {
   }).addListener('error', function(err) {
     throw err;
   }).addListener('end', function() {
-    sys.puts('Compressed length: ' + output.length);
+    console.log('Compressed length: ' + output.length);
     continuation(output);
   });
 
   compressor.write("My data that needs ");
   compressor.write("to be compressed. 01234567890.");
   compressor.close();
-  sys.puts('Requests done.');
+  console.log('Requests done.');
 }
 
 
@@ -61,7 +61,7 @@ function doDecompress(decompressor, input) {
   var d1 = input.substr(0, 25);
   var d2 = input.substr(25);
 
-  sys.puts('Making decompression requests...');
+  console.log('Making decompression requests...');
   var output = '';
   decompressor.setInputEncoding('binary');
   decompressor.setEncoding('utf8');
@@ -70,16 +70,15 @@ function doDecompress(decompressor, input) {
   }).addListener('error', function(err) {
     throw err;
   }).addListener('end', function() {
-    sys.puts('Decompressed length: ' + output.length);
-    sys.puts('Raw data: ' + output);
+    console.log('Decompressed length: ' + output.length);
+    console.log('Raw data: ' + output);
   });
   decompressor.write(d1);
   decompressor.write(d2);
   decompressor.close();
-  sys.puts('Requests done.');
+  console.log('Requests done.');
 }
 
 
 doCompress(new compress.BzipStream(),
     bind(doDecompress, null, new compress.BunzipStream()));
-

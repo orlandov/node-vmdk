@@ -22,7 +22,7 @@
 
 var compress=require("../lib/compress");
 var events=require('events');
-var sys=require("sys");
+var util=require("util");
 var posix=require("fs");
 var Buffer = require('buffer').Buffer;
 
@@ -48,7 +48,7 @@ function seq() {
     });
   }
 }
-sys.inherits(seq, events.EventEmitter);
+util.inherits(seq, events.EventEmitter);
 
 function createBuffer(str, enc) {
   enc = enc || 'utf8';
@@ -61,28 +61,28 @@ function createBuffer(str, enc) {
 
 // Create gzip stream
 var gzip = new compress.Gzip(4);
-sys.puts('gzip created');
+console.log('gzip created');
 
 // Pump data to be compressed
 var gzdata1, gzdata2, gzdata3;
 var compression = new seq(
     function(state, continuation){
       gzip.write(createBuffer("My data that needs "), function(err, data) {
-        sys.puts("Compressed size: " + data.length);
+        console.log("Compressed size: " + data.length);
         continuation(err, state + data.toString('binary'));
       });
     },
     function(state, continuation){
       gzip.write(createBuffer("to be compressed. 01234567890."), function(err, data) {
-        sys.puts("Compressed size: " + data.length);
+        console.log("Compressed size: " + data.length);
         continuation(err, state + data.toString('binary'));
       }); 
     },
     function(state, continuation){
       gzip.close(function(err, data) {
-        sys.puts("Last bit: " + data.length);
+        console.log("Last bit: " + data.length);
         data = state + data.toString('binary');
-        sys.puts("Total compressed size: " + data.length);
+        console.log("Total compressed size: " + data.length);
         continuation(err, data);
       });
     }
@@ -119,9 +119,9 @@ function doCompress() {
 }
 
 function doDecompress(data) {
-  sys.puts('Decompressing');
+  console.log('Decompressing');
   decompression.addListener('success', function(data){
-    sys.puts(data.output);
+    console.log(data.output);
   });
 
   decompression.start({input:[data.substr(0,25), data.substr(25)],output:''});

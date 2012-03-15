@@ -28,7 +28,6 @@
 #include <new>
 
 #include <node.h>
-#include <node_events.h>
 #include <node_buffer.h>
 #include <node_version.h>
 #include <assert.h>
@@ -324,12 +323,11 @@ class ZipLib : ObjectWrap {
 
   // Process requests queue.
   // Executed in worker thread.
-  static int DoProcess(eio_req *req) {
+  static void DoProcess(eio_req *req) {
     Request *request = reinterpret_cast<Request*>(req->data);
     //DEBUG_P("Processing [%p]", request);
     Self *self = request->self();
     self->DoProcess(request);
-    return 0;
   }
 
   void DoProcess(Request *request) {

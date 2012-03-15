@@ -23,7 +23,7 @@
 var events = require('events');
 var Buffer = require('buffer').Buffer;
 var assert = require('assert');
-var bindings = require('./compress-bindings');
+var bindings = require('../../build/Release/compress-bindings');
 
 function removed(str) {
   return function() {
